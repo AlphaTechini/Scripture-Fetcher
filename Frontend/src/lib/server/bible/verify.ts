@@ -1,7 +1,4 @@
-import { config } from 'dotenv';
-import { fetchPassage, fetchMultiplePassages } from '../bible.js';
-
-config();
+import { parseReference, buildSearchQuery } from '../bible.js';
 
 const testResults: { test: string; passed: boolean; message: string }[] = [];
 
@@ -12,89 +9,74 @@ function log(test: string, passed: boolean, message: string) {
 }
 
 async function runTests() {
-	console.log('\n=== Stage 3: Bible API Verification ===\n');
+	console.log('\n=== Stage 3: Bible Reference Parser Verification ===\n');
 
 	try {
-		// Test 3.1: Fetch John 3:16 (KJV)
-		const john316 = await fetchPassage('John 3:16', 'KJV');
+		// Test 3.1: Parse single verse
+		const john316 = parseReference('John 3:16');
 		log(
 			'3.1',
-			john316.passageText.toLowerCase().includes('god so loved') &&
-				john316.book === 'JHN' &&
-				john316.chapter === '3',
-			`John 3:16 fetched: "${john316.passageText.slice(0, 50)}..."`
+			john316?.book === 'JHN' && john316?.chapter === '3' && john316?.verses === '16',
+			`John 3:16 parsed: book=${john316?.book}, chapter=${john316?.chapter}, verses=${john316?.verses}`
 		);
 
-		// Test 3.2: Fetch Romans 8:28-30 (KJV)
-		const rom8 = await fetchPassage('Romans 8:28-30', 'KJV');
+		// Test 3.2: Parse verse range
+		const rom8 = parseReference('Romans 8:28-30');
 		log(
 			'3.2',
-			rom8.passageText.length > 100 && rom8.book === 'ROM' && rom8.chapter === '8',
-			`Romans 8:28-30 fetched (${rom8.passageText.length} chars)`
+			rom8?.book === 'ROM' && rom8?.chapter === '8' && rom8?.verses === '28-30',
+			`Romans 8:28-30 parsed: book=${rom8?.book}, chapter=${rom8?.chapter}, verses=${rom8?.verses}`
 		);
 
-		// Test 3.3: Fetch 1 Samuel 17 (full chapter)
-		const sam17 = await fetchPassage('1 Samuel 17', 'KJV');
+		// Test 3.3: Parse full chapter (no verses)
+		const sam17 = parseReference('1 Samuel 17');
 		log(
 			'3.3',
-			sam17.passageText.length > 1000 && sam17.book === '1SA' && sam17.chapter === '17',
-			`1 Samuel 17 fetched (${sam17.passageText.length} chars)`
+			sam17?.book === '1SA' && sam17?.chapter === '17' && sam17?.verses === undefined,
+			`1 Samuel 17 parsed: book=${sam17?.book}, chapter=${sam17?.chapter}`
 		);
 
-		// Test 3.4: Fetch Genesis 1:1-31 (full chapter range)
-		const gen1 = await fetchPassage('Genesis 1:1-31', 'KJV');
+		// Test 3.4: Parse chapter range
+		const gen1 = parseReference('Genesis 1:1-31');
 		log(
 			'3.4',
-			gen1.passageText.length > 500 && gen1.book === 'GEN' && gen1.chapter === '1',
-			`Genesis 1:1-31 fetched (${gen1.passageText.length} chars)`
+			gen1?.book === 'GEN' && gen1?.chapter === '1' && gen1?.verses === '1-31',
+			`Genesis 1:1-31 parsed: book=${gen1?.book}, chapter=${gen1?.chapter}, verses=${gen1?.verses}`
 		);
 
-		// Test 3.5: Fetch invalid reference
-		let invalidError = false;
-		try {
-			await fetchPassage('FakeBook 1:1', 'KJV');
-		} catch {
-			invalidError = true;
-		}
-		log('3.5', invalidError, 'Invalid reference throws error (not crash)');
+		// Test 3.5: Parse invalid reference
+		const invalid = parseReference('FakeBook 1:1');
+		log('3.5', invalid === null, `Invalid reference returns null: "${invalid}"`);
 
-		// Test 3.6: Fetch with invalid API key (simulate by checking error handling)
-		let apiKeyError = false;
-		try {
-			const originalKey = process.env.API_BIBLE_KEY;
-			process.env.API_BIBLE_KEY = 'invalid_key';
-			await fetchPassage('John 3:16', 'KJV');
-			process.env.API_BIBLE_KEY = originalKey;
-		} catch {
-			apiKeyError = true;
-		}
-		log('3.6', apiKeyError, 'Invalid API key throws error (not crash)');
+		// Test 3.6: Parse abbreviated book name
+		const jn = parseReference('Jn 3:16');
+		log(
+			'3.6',
+			jn?.book === 'JHN' && jn?.chapter === '3',
+			`Jn 3:16 parsed (abbreviated): book=${jn?.book}`
+		);
 
-		// Test 3.7: Fetch 10 passages in sequence
-		const refs = [
-			'John 3:16',
-			'Romans 8:28',
-			'Psalm 23:1',
-			'Proverbs 3:5',
-			'Isaiah 40:31',
-			'Matthew 5:14',
-			'Philippians 4:13',
-			'Hebrews 11:1',
-			'James 1:5',
-			'1 Peter 5:7'
+		// Test 3.7: Build search query
+		const query = buildSearchQuery('John 3:16');
+		log(
+			'3.7',
+			query.includes('John 3:16') && query.includes('KJV'),
+			`Search query: "${query}"`
+		);
+
+		// Test 3.8: Parse various book formats
+		const tests = [
+			{ ref: 'Matt 5:14', expected: 'MAT' },
+			{ ref: '1 Cor 13:4', expected: '1CO' },
+			{ ref: '2 Peter 1:3', expected: '2PE' },
+			{ ref: 'Rev 21:1', expected: 'REV' },
+			{ ref: 'Psalm 23:1', expected: 'PSA' }
 		];
-		const passages = await fetchMultiplePassages(refs, 'KJV');
-		log('3.7', passages.length === 10, `10 passages fetched in sequence (${passages.length} succeeded)`);
-
-		// Test 3.8: Verify response shape
-		const shapeTest = await fetchPassage('John 1:1', 'KJV');
-		const hasAllFields =
-			typeof shapeTest.reference === 'string' &&
-			typeof shapeTest.passageText === 'string' &&
-			typeof shapeTest.book === 'string' &&
-			typeof shapeTest.chapter === 'string' &&
-			shapeTest.passageText.length > 0;
-		log('3.8', hasAllFields, 'Response has all required fields (reference, passageText, book, chapter)');
+		const allParsed = tests.every(t => {
+			const result = parseReference(t.ref);
+			return result?.book === t.expected;
+		});
+		log('3.8', allParsed, `All abbreviated book names parsed correctly`);
 	} catch (error: any) {
 		console.error('\n[ERROR] Test execution failed:', error.message);
 	}

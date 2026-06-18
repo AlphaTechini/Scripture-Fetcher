@@ -13,6 +13,8 @@ import { relations } from 'drizzle-orm';
 export const users = pgTable('users', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	name: text('name').notNull(),
+	email: text('email').unique(),
+	password: text('password'),
 	translation: text('translation').notNull().default('KJV'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
