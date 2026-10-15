@@ -25,13 +25,9 @@ export const actions: Actions = {
 	verify: async ({ request, cookies }) => {
 		const formData = await request.formData();
 		const codeValue = formData.get('code');
-		const code = typeof codeValue === 'string' ? codeValue.trim() : '';
+		const code = typeof codeValue === 'string' ? codeValue.replace(/\D/g, '') : '';
 
-		if (!code) {
-			return fail(400, { error: 'Verification code is required' });
-		}
-
-		if (!/^\d{6}$/.test(code)) {
+		if (code.length !== 6) {
 			return fail(400, { error: 'Code must be 6 digits' });
 		}
 

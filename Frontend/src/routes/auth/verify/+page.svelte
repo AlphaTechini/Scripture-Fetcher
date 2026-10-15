@@ -7,16 +7,8 @@
 		form
 	}: { data: { email: string }; form: { error?: string; success?: string } | null } = $props();
 
-	let code = $state('');
 	let verifying = $state(false);
 	let resending = $state(false);
-
-	function handleCodeInput(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const digits = input.value.replace(/\D/g, '').slice(0, 6);
-		input.value = digits;
-		code = digits;
-	}
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-[#F5E6C8] px-4">
@@ -71,13 +63,8 @@
 						type="text"
 						id="code"
 						name="code"
-						value={code}
-						oninput={handleCodeInput}
-						required
+						autocomplete="off"
 						inputmode="numeric"
-						autocomplete="one-time-code"
-						maxlength="6"
-						pattern="[0-9]{6}"
 						placeholder="000000"
 						class="w-full px-4 py-3 bg-[#F5E6C8] border-2 border-[#C9A84C] rounded font-[Courier_New] text-2xl tracking-[0.5em] text-center text-[#1A1A1A] focus:outline-none focus:border-[#8B2500]"
 					/>
@@ -85,7 +72,7 @@
 
 				<button
 					type="submit"
-					disabled={!/^\d{6}$/.test(code) || verifying}
+					disabled={verifying}
 					class="w-full py-3 bg-[#8B2500] text-[#F5E6C8] font-[Cinzel] font-semibold rounded hover:bg-[#6B1D00] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					{verifying ? 'Verifying…' : 'Verify & Enter'}
