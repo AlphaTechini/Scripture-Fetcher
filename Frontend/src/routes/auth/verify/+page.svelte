@@ -10,6 +10,13 @@
 	let code = $state('');
 	let verifying = $state(false);
 	let resending = $state(false);
+
+	function handleCodeInput(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const digits = input.value.replace(/\D/g, '').slice(0, 6);
+		input.value = digits;
+		code = digits;
+	}
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-[#F5E6C8] px-4">
@@ -64,7 +71,8 @@
 						type="text"
 						id="code"
 						name="code"
-						bind:value={code}
+						value={code}
+						oninput={handleCodeInput}
 						required
 						inputmode="numeric"
 						autocomplete="one-time-code"
