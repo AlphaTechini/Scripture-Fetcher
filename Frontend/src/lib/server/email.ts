@@ -1,6 +1,9 @@
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 
+// Verified sender identity is baked in so OTP delivery cannot break on missing or unverified config.
+const FROM_EMAIL = 'Scripture Fetcher <noreply@cyberpunkinc.xyz>';
+
 export interface SendEmailOptions {
 	to: string;
 	subject: string;
@@ -10,14 +13,13 @@ export interface SendEmailOptions {
 
 export async function sendEmail({ to, subject, html, text }: SendEmailOptions): Promise<string> {
 	const apiKey = env.RESEND_API_KEY;
-	const fromAddress = env.RESEND_FROM_EMAIL;
-	if (!apiKey || !fromAddress) {
-		throw new Error('RESEND_API_KEY and RESEND_FROM_EMAIL are required to send email');
+	if (!apiKey) {
+		throw new Error('RESEND_API_KEY is required to send email');
 	}
 
 	const resend = new Resend(apiKey);
 	const result = await resend.emails.send({
-		from: fromAddress,
+		from: FROM_EMAIL,
 		to,
 		subject,
 		html,

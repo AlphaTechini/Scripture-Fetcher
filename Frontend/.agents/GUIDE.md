@@ -4,7 +4,7 @@
 
 - Use custom email and password authentication rather than Supabase Auth.
 - Store opaque session token hashes in PostgreSQL so sessions can be revoked.
-- Send signup OTPs through Resend and fail closed when email is not configured or delivery fails.
+- Send signup OTPs through Resend from the fixed verified sender `Scripture Fetcher <noreply@cyberpunkinc.xyz>` and fail closed when `RESEND_API_KEY` is missing or delivery fails.
 - Store OTPs as keyed HMAC digests and bind verification actions to an opaque browser flow token.
 - OTP lifetime is 10 minutes with a maximum of 5 verification attempts.
 - Resend cooldown is 60 seconds.
