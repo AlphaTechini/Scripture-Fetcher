@@ -16,6 +16,11 @@
 
 The database state for the earlier plaintext `email_verifications` schema is unknown. Authentication migrations must remain non-destructive until that state is confirmed. Legacy rows and columns may remain temporarily, but runtime code must never read or write plaintext OTPs.
 
+## Deployment
+
+- Deploy through the GitHub integration: pushes to `auth-and-anthropic` build server-side and the preview deployment is promoted to production. Local CLI deploys are the fallback when the network allows large uploads.
+- When the Vercel CLI fails with `fetch failed`, `UND_ERR_CONNECT_TIMEOUT`, or `ECONNRESET` on large uploads (observed here for TLS 1.3 handshakes and big request bodies), run it with `NODE_OPTIONS=--tls-max-v1.2`. Small CLI calls like `env ls`, `inspect`, and `promote` keep working.
+
 ## AI Generation
 
 - Use the Anthropic Messages API with `claude-haiku-5-5`.
