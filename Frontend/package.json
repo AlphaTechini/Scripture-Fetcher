@@ -19,8 +19,8 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
-		"@sveltejs/adapter-auto": "^7.0.1",
-		"@sveltejs/kit": "^2.63.0",
+		"@sveltejs/adapter-vercel": "^6.3.4",
+		"@sveltejs/kit": "^2.70.3",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@tailwindcss/forms": "^0.5.11",
 		"@tailwindcss/typography": "^0.5.19",
@@ -43,8 +43,7 @@
 		"vite": "^8.0.16"
 	},
 	"dependencies": {
-		"@google/genai": "^2.8.0",
-		"@modelcontextprotocol/sdk": "^1.29.0",
+		"@modelcontextprotocol/sdk": "^1.31.0",
 		"bcryptjs": "^2.4.3",
 		"dotenv": "^17.4.2",
 		"drizzle-orm": "^0.45.2",

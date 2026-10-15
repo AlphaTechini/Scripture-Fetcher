@@ -1,22 +1,97 @@
-import { GoogleGenAI } from '@google/genai';
+const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_MODEL = 'claude-haiku-5-5';
+const ANTHROPIC_VERSION = '2023-06-01';
+// Haiku 5.5 caps output at 128K tokens; this leaves headroom for thinking tokens plus long multi-chapter passages.
+const MAX_OUTPUT_TOKENS = 64000;
 
-let aiInstance: GoogleGenAI | null = null;
+interface AnthropicContentBlock {
+	type: string;
+	text?: string;
+}
 
-async function getAI(): Promise<GoogleGenAI> {
-	if (aiInstance) return aiInstance;
+interface AnthropicMessageResponse {
+	content?: AnthropicContentBlock[];
+	stop_reason?: string | null;
+	error?: {
+		message?: string;
+	};
+}
 
-	let apiKey = '';
+// Structured outputs reject numeric and string-length constraints, so the exactly-3-alternatives rule stays enforced in code below.
+const ALTERNATIVES_OUTPUT_SCHEMA = {
+	type: 'object',
+	properties: {
+		alternatives: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					label: { type: 'string' },
+					influenceType: { type: 'string', enum: ['primary', 'historical', 'user_directed'] },
+					storyTitle: { type: 'string' },
+					storySummary: { type: 'string' },
+					reasoning: { type: 'string' },
+					passages: {
+						type: 'array',
+						items: {
+							type: 'object',
+							properties: {
+								reference: { type: 'string' },
+								passageText: { type: 'string' },
+								book: { type: 'string' },
+								chapter: { type: 'string' },
+								orderIndex: { type: 'number' }
+							},
+							required: ['reference', 'passageText', 'book', 'chapter', 'orderIndex'],
+							additionalProperties: false
+						}
+					},
+					prayerPoints: {
+						type: 'array',
+						items: {
+							type: 'object',
+							properties: {
+								content: { type: 'string' },
+								passageRef: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+								orderIndex: { type: 'number' }
+							},
+							required: ['content', 'passageRef', 'orderIndex'],
+							additionalProperties: false
+						}
+					}
+				},
+				required: [
+					'label',
+					'influenceType',
+					'storyTitle',
+					'storySummary',
+					'reasoning',
+					'passages',
+					'prayerPoints'
+				],
+				additionalProperties: false
+			}
+		}
+	},
+	required: ['alternatives'],
+	additionalProperties: false
+};
+
+async function getAnthropicApiKey(): Promise<string> {
 	try {
 		const { env } = await import('$env/dynamic/private');
-		apiKey = env.GEMINI_API_KEY;
+		if (env.ANTHROPIC_API_KEY) return env.ANTHROPIC_API_KEY;
 	} catch {
-		const { config } = await import('dotenv');
-		config();
-		apiKey = process.env.GEMINI_API_KEY || '';
+		// Standalone verification scripts do not have SvelteKit's environment module.
 	}
 
-	aiInstance = new GoogleGenAI({ apiKey });
-	return aiInstance;
+	{
+		const { config } = await import('dotenv');
+		config();
+		if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
+	}
+
+	throw new Error('ANTHROPIC_API_KEY environment variable is required');
 }
 
 export interface GeneratedPassage {
@@ -58,9 +133,10 @@ export interface GenerateAlternativesInput {
 }
 
 function buildSystemPrompt(input: GenerateAlternativesInput): string {
-	const historyNote = input.readingHistory.stories.length > 0
-		? `Recently covered stories: ${input.readingHistory.stories.join(', ')}. Recently covered topics: ${input.readingHistory.topics.join(', ')}. Books recently read: ${input.readingHistory.books.join(', ')}. DO NOT repeat these.`
-		: 'No reading history available. Feel free to select any story.';
+	const historyNote =
+		input.readingHistory.stories.length > 0
+			? `Recently covered stories: ${input.readingHistory.stories.join(', ')}. Recently covered topics: ${input.readingHistory.topics.join(', ')}. Books recently read: ${input.readingHistory.books.join(', ')}. DO NOT repeat these.`
+			: 'No reading history available. Feel free to select any story.';
 
 	const userNotesNote = input.userNotes
 		? `User specifically requested: "${input.userNotes}". Alternative 3 MUST directly address this interest.`
@@ -139,32 +215,67 @@ Return a JSON object with this exact structure:
 export async function generateAlternatives(
 	input: GenerateAlternativesInput
 ): Promise<GeneratedAlternative[]> {
-	const ai = await getAI();
+	const apiKey = await getAnthropicApiKey();
 	const systemPrompt = buildSystemPrompt(input);
-
-	const response = await ai.models.generateContent({
-		model: 'gemini-2.5-flash',
-		contents: systemPrompt,
-		config: {
-			temperature: 0.7,
-			responseMimeType: 'application/json'
-		}
+	const response = await fetch(ANTHROPIC_MESSAGES_URL, {
+		method: 'POST',
+		headers: {
+			'x-api-key': apiKey,
+			'anthropic-version': ANTHROPIC_VERSION,
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			model: ANTHROPIC_MODEL,
+			max_tokens: MAX_OUTPUT_TOKENS,
+			messages: [{ role: 'user', content: systemPrompt }],
+			output_config: {
+				format: {
+					type: 'json_schema',
+					schema: ALTERNATIVES_OUTPUT_SCHEMA
+				}
+			}
+		})
 	});
 
-	const text = response.text;
+	const payload = (await response.json().catch(() => null)) as AnthropicMessageResponse | null;
+	if (!response.ok) {
+		throw new Error(
+			payload?.error?.message || `Anthropic request failed with status ${response.status}`
+		);
+	}
+
+	if (payload?.stop_reason === 'refusal') {
+		throw new Error('Anthropic declined this generation request');
+	}
+	if (payload?.stop_reason === 'max_tokens') {
+		throw new Error('Anthropic response was truncated before the JSON completed');
+	}
+
+	// Adaptive thinking blocks come first, so collect the answer from text blocks only.
+	const text = (payload?.content ?? [])
+		.flatMap((block) => (block.type === 'text' && block.text ? [block.text] : []))
+		.join('');
+
 	if (!text) {
-		throw new Error('AI returned empty response');
+		throw new Error('Anthropic returned an empty response');
 	}
 
 	let parsed: { alternatives: GeneratedAlternative[] };
 	try {
-		const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+		const cleaned = text
+			.replace(/```json\s*/g, '')
+			.replace(/```\s*/g, '')
+			.trim();
 		parsed = JSON.parse(cleaned);
 	} catch {
 		throw new Error(`Failed to parse AI response as JSON: ${text.slice(0, 200)}...`);
 	}
 
-	if (!parsed.alternatives || !Array.isArray(parsed.alternatives) || parsed.alternatives.length !== 3) {
+	if (
+		!parsed.alternatives ||
+		!Array.isArray(parsed.alternatives) ||
+		parsed.alternatives.length !== 3
+	) {
 		throw new Error('AI response must contain exactly 3 alternatives');
 	}
 
