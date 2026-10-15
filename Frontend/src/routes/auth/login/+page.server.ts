@@ -3,7 +3,16 @@ import { fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { hashPassword, verifyPassword, createSession, getSession } from '$lib/server/auth';
+import { createSession, getSession } from '$lib/server/auth';
+import { hashPassword, validatePassword, verifyPassword } from '$lib/server/auth/password';
+import { parseEmail } from '$lib/server/auth/input';
+import { consumeOtpSendLimits } from '$lib/server/auth/rate-limit';
+import {
+	cancelEmailVerification,
+	prepareEmailVerification,
+	setVerificationFlowCookie
+} from '$lib/server/auth/verification';
+import { sendOtpEmail } from '$lib/server/auth/verification-email';
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	const session = await getSession(cookies);
@@ -14,11 +23,11 @@ export const load: PageServerLoad = async ({ cookies }) => {
 export const actions: Actions = {
 	signin: async ({ request, cookies }) => {
 		const formData = await request.formData();
-		const email = (formData.get('email') as string)?.trim().toLowerCase();
-		const password = formData.get('password') as string;
+		const email = parseEmail(formData.get('email'));
+		const password = formData.get('password');
 
-		if (!email || !password) {
-			return fail(400, { error: 'Email and password are required' });
+		if (!email || typeof password !== 'string' || !password) {
+			return fail(400, { error: 'A valid email and password are required' });
 		}
 
 		const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -36,18 +45,19 @@ export const actions: Actions = {
 		redirect(303, '/');
 	},
 
-	signup: async ({ request, cookies }) => {
+	signup: async ({ request, cookies, getClientAddress, setHeaders }) => {
 		const formData = await request.formData();
-		const email = (formData.get('email') as string)?.trim().toLowerCase();
-		const password = formData.get('password') as string;
-		const confirmPassword = formData.get('confirmPassword') as string;
+		const email = parseEmail(formData.get('email'));
+		const password = formData.get('password');
+		const confirmPassword = formData.get('confirmPassword');
 
-		if (!email || !password) {
-			return fail(400, { error: 'Email and password are required' });
+		if (!email || typeof password !== 'string' || !password) {
+			return fail(400, { error: 'A valid email and password are required' });
 		}
 
-		if (password.length < 6) {
-			return fail(400, { error: 'Password must be at least 6 characters' });
+		const passwordError = validatePassword(password);
+		if (passwordError) {
+			return fail(400, { error: passwordError });
 		}
 
 		if (password !== confirmPassword) {
@@ -59,15 +69,31 @@ export const actions: Actions = {
 			return fail(400, { error: 'Email already in use' });
 		}
 
+		const rateLimit = await consumeOtpSendLimits(email, getClientAddress());
+		if (!rateLimit.allowed) {
+			setHeaders({ 'Retry-After': String(rateLimit.retryAfterSeconds) });
+			return fail(429, { error: 'Too many verification emails. Please try again later.' });
+		}
+
 		const passwordHash = await hashPassword(password);
-		const name = email.split('@')[0] || 'Scholar';
+		const prepared = await prepareEmailVerification(email, passwordHash);
+		if (prepared.status === 'missing') {
+			return fail(500, { error: 'Could not start verification. Please try again.' });
+		}
+		if (prepared.status === 'cooldown') {
+			setHeaders({ 'Retry-After': String(prepared.retryAfterSeconds) });
+			return fail(429, { error: 'Please wait before requesting another verification code.' });
+		}
 
-		const [user] = await db
-			.insert(users)
-			.values({ name, email, password: passwordHash })
-			.returning();
+		try {
+			await sendOtpEmail(prepared.email, prepared.code);
+		} catch {
+			await cancelEmailVerification(prepared.flowToken);
+			console.error('[auth] Verification email delivery failed');
+			return fail(500, { error: 'Could not send verification code. Please try again.' });
+		}
 
-		await createSession(cookies, user.id);
-		redirect(303, '/');
+		setVerificationFlowCookie(cookies, prepared.flowToken);
+		redirect(303, '/auth/verify');
 	}
 };

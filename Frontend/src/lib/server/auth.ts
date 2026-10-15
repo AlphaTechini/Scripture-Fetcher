@@ -1,34 +1,42 @@
 import type { Cookies } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
-import { createHmac, timingSafeEqual } from 'crypto';
-import bcrypt from 'bcryptjs';
 import { db } from './db';
-import { users } from './db/schema';
-import { eq } from 'drizzle-orm';
-import { SESSION_SECRET } from '$env/dynamic/private';
+import { authSessions, users } from './db/schema';
+import { and, eq, gt } from 'drizzle-orm';
+import { hashToken, isValidToken, randomToken } from './auth/crypto';
+import { SESSION_TTL_MS } from './auth/policy';
 
 const SESSION_COOKIE = 'session';
-
-function signCookie(value: string): string {
-	const hmac = createHmac('sha256', SESSION_SECRET).update(value).digest('hex');
-	return `${value}.${hmac}`;
-}
-
-function unsignCookie(signed: string): string | null {
-	const [value, hmac] = signed.split('.');
-	if (!value || !hmac) return null;
-	const expected = createHmac('sha256', SESSION_SECRET).update(value).digest('hex');
-	if (!timingSafeEqual(Buffer.from(hmac), Buffer.from(expected))) return null;
-	return value;
-}
 
 export async function getUserFromSession(cookies: Cookies) {
 	const token = cookies.get(SESSION_COOKIE);
 	if (!token) return null;
-	const userId = unsignCookie(token);
-	if (!userId) return null;
-	const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-	return rows[0] ?? null;
+	if (!isValidToken(token)) {
+		cookies.delete(SESSION_COOKIE, { path: '/' });
+		return null;
+	}
+
+	const tokenHash = hashToken(token);
+	const rows = await db
+		.select({
+			id: users.id,
+			name: users.name,
+			email: users.email,
+			translation: users.translation,
+			createdAt: users.createdAt
+		})
+		.from(authSessions)
+		.innerJoin(users, eq(authSessions.userId, users.id))
+		.where(and(eq(authSessions.tokenHash, tokenHash), gt(authSessions.expiresAt, new Date())))
+		.limit(1);
+
+	if (!rows[0]) {
+		await db.delete(authSessions).where(eq(authSessions.tokenHash, tokenHash));
+		cookies.delete(SESSION_COOKIE, { path: '/' });
+		return null;
+	}
+
+	return rows[0];
 }
 
 export async function getSession(cookies: Cookies) {
@@ -44,24 +52,28 @@ export async function requireAuth(cookies: Cookies) {
 }
 
 export async function createSession(cookies: Cookies, userId: string) {
-	const token = signCookie(userId);
+	const token = randomToken();
+	const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+
+	await db.insert(authSessions).values({
+		userId,
+		tokenHash: hashToken(token),
+		expiresAt
+	});
+
 	cookies.set(SESSION_COOKIE, token, {
 		path: '/',
 		httpOnly: true,
-		sameSite: 'strict',
+		sameSite: 'lax',
 		secure: import.meta.env.PROD,
-		maxAge: 60 * 60 * 24 * 7
+		maxAge: Math.floor(SESSION_TTL_MS / 1000)
 	});
 }
 
-export function clearSession(cookies: Cookies) {
+export async function clearSession(cookies: Cookies) {
+	const token = cookies.get(SESSION_COOKIE);
+	if (token && isValidToken(token)) {
+		await db.delete(authSessions).where(eq(authSessions.tokenHash, hashToken(token)));
+	}
 	cookies.delete(SESSION_COOKIE, { path: '/' });
-}
-
-export async function hashPassword(password: string): Promise<string> {
-	return bcrypt.hash(password, 12);
-}
-
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-	return bcrypt.compare(password, hash);
 }

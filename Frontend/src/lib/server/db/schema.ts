@@ -5,7 +5,8 @@ import {
 	boolean,
 	timestamp,
 	integer,
-	jsonb,
+	index,
+	uniqueIndex,
 	type AnyPgColumn
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
@@ -18,6 +19,57 @@ export const users = pgTable('users', {
 	translation: text('translation').notNull().default('KJV'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+export const authSessions = pgTable(
+	'auth_sessions',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		tokenHash: text('token_hash').notNull(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('auth_sessions_token_hash_unique').on(table.tokenHash),
+		index('auth_sessions_user_id_idx').on(table.userId),
+		index('auth_sessions_expires_at_idx').on(table.expiresAt)
+	]
+);
+
+export const emailVerifications = pgTable(
+	'email_verifications',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		email: text('email').notNull(),
+		emailKey: text('email_key'),
+		legacyCode: text('code').notNull().default(''),
+		codeHash: text('code_hash'),
+		flowTokenHash: text('flow_token_hash'),
+		passwordHash: text('password_hash').notNull(),
+		attempts: integer('attempts').notNull().default(0),
+		lastSentAt: timestamp('last_sent_at', { withTimezone: true }),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		uniqueIndex('email_verifications_email_key_unique').on(table.emailKey),
+		uniqueIndex('email_verifications_flow_token_hash_unique').on(table.flowTokenHash),
+		index('email_verifications_email_idx').on(table.email)
+	]
+);
+
+export const authRateLimits = pgTable(
+	'auth_rate_limits',
+	{
+		key: text('key').primaryKey(),
+		count: integer('count').notNull().default(0),
+		windowStartedAt: timestamp('window_started_at', { withTimezone: true }).notNull(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
+	},
+	(table) => [index('auth_rate_limits_expires_at_idx').on(table.expiresAt)]
+);
 
 export const motivationalQuotes = pgTable('motivational_quotes', {
 	id: uuid('id').primaryKey().defaultRandom(),

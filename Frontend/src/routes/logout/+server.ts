@@ -1,9 +1,8 @@
 import type { RequestHandler } from './$types';
 import { redirect } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/server/db/supabase';
+import { clearSession } from '$lib/server/auth';
 
 export const POST: RequestHandler = async ({ cookies }) => {
-	const supabase = createSupabaseServerClient(cookies);
-	await supabase.auth.signOut();
+	await clearSession(cookies);
 	redirect(303, '/auth/login');
 };

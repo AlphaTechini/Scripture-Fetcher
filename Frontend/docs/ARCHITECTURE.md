@@ -2,7 +2,7 @@
 
 ## Overview
 
-Scripture Fetcher is a fullstack SvelteKit application that serves as a personal Bible study companion. It uses Google Gemini (with Grounding via Google Search) to surface **complete Bible stories** — not isolated passages — based on the user's mood, chosen category, temporal context, and personal notes. Each study session returns **multiple alternatives**, each representing a full narrative that may span multiple chapters or even multiple books. The AI also generates prayer points for each alternative. Repetition is avoided through database-backed history tracking.
+Scripture Fetcher is a fullstack SvelteKit application that serves as a personal Bible study companion. It uses Anthropic Claude Haiku 5.5 to surface **complete Bible stories** — not isolated passages — based on the user's mood, chosen category, temporal context, and personal notes. Each study session returns **multiple alternatives**, each representing a full narrative that may span multiple chapters or even multiple books. The AI also generates prayer points for each alternative. Repetition is avoided through database-backed history tracking.
 
 The entire application adopts a Roman Empire scholarly aesthetic: parchment textures, scroll metaphors, ink-style typography, and classical serif fonts.
 
@@ -38,11 +38,10 @@ The entire application adopts a Roman Empire scholarly aesthetic: parchment text
 └────────┼──────────┼──────────┼──────────────┼────────────┘
          │          │          │              │
          ▼          ▼          ▼              ▼
-┌──────────────┐ ┌────────┐ ┌──────────┐
-│  Supabase    │ │ Gemini │ │ API.Bible│
-│  (Postgres   │ │ API    │ │ (or web  │
-│   + Auth)    │ │        │ │  search) │
-└──────────────┘ └────────┘ └──────────┘
+┌──────────────┐ ┌───────────┐ ┌──────────┐
+│  Supabase    │ │ Anthropic │ │ API.Bible│
+│  (Postgres)  │ │    API    │ │           │
+└──────────────┘ └───────────┘ └──────────┘
 ```
 
 ---
@@ -58,6 +57,7 @@ Supabase Auth handles user identity from day one. Email/password or OAuth (Googl
 - All database queries are scoped to the authenticated user via Row Level Security (RLS).
 
 **Key files:**
+
 - To find **auth setup** visit [+layout.server.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/+layout.server.ts)
 - To find **login page** visit [auth/login/+page.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/auth/login/+page.svelte)
 - To find **auth callback** visit [auth/callback/+server.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/auth/callback/+server.ts)
@@ -74,12 +74,14 @@ The welcome page is the landing experience. It displays:
 4. **Subtext:** Smaller (but readable) description: "A random verse to inspire your Bible study."
 
 **Quote selection logic:**
+
 - The `motivational_quotes` table stores ~150-200 pre-seeded, verified Bible verses.
 - Each quote is tagged with `mood_tags`, `category_tags`, and `season_tags`.
 - On page load, `quotes.ts` selects a quote weighted by the current time of day, season, and the user's recent quote history (to avoid showing the same quote too frequently).
 - Every quote shown is logged to `quote_logs` with a timestamp — this doubles as the usage metrics source.
 
 **Key files:**
+
 - To find **quote selection logic** visit [quotes.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/quotes.ts)
 - To find **quote display component** visit [QuoteDisplay.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/components/QuoteDisplay.svelte)
 
@@ -89,16 +91,17 @@ The welcome page is the landing experience. It displays:
 
 The input form collects context that the AI uses to select complete Bible stories. Fields:
 
-| Field | Type | Behavior |
-|-------|------|----------|
-| **Mood** | Searchable dropdown | Many options (Joyful, Anxious, Grateful, Weary, Hopeful, Confused, Angry, Peaceful, Lonely, Courageous, Tempted, Grieving, Celebrating, Doubtful, Determined, Restless, Content, Overwhelmed, etc.). Search bar for filtering. |
-| **Category** | Searchable dropdown | Many options (Faith, Love, Wisdom, Strength, Forgiveness, Purpose, Patience, Humility, Justice, Mercy, Hope, Salvation, Prayer, Worship, Discipleship, Prophecy, Creation, End Times, Relationships, Leadership, Suffering, Joy, Peace, etc.). Search bar for filtering. |
-| **Time of Day** | Auto-detected | Derived from client's local time: Morning (5-11), Afternoon (12-16), Evening (17-20), Night (21-4). Not user-editable. |
-| **Time of Year** | Auto-detected | Current date passed to AI. The AI uses this to factor in liturgical/seasonal context (Christmas, Easter, Lent, Advent, New Year, etc.). |
-| **Today's Date** | Auto-detected | Passed to AI so it can reference historical events that happened on this day in church history, world history (not Bible-specific), or the biblical calendar, and surface related scriptures. |
-| **Additional Notes** | Optional textarea | Free-form text where the user can express specific interests. Examples: "I want to learn more about Mary," "Tell me about Peter's journey," "Something about overcoming fear." When provided, this input heavily influences Alternative 3 (User-Directed). When empty, Alternative 3 falls back to a deeper exploration of the selected category and mood. |
+| Field                | Type                | Behavior                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mood**             | Searchable dropdown | Many options (Joyful, Anxious, Grateful, Weary, Hopeful, Confused, Angry, Peaceful, Lonely, Courageous, Tempted, Grieving, Celebrating, Doubtful, Determined, Restless, Content, Overwhelmed, etc.). Search bar for filtering.                                                                                                                             |
+| **Category**         | Searchable dropdown | Many options (Faith, Love, Wisdom, Strength, Forgiveness, Purpose, Patience, Humility, Justice, Mercy, Hope, Salvation, Prayer, Worship, Discipleship, Prophecy, Creation, End Times, Relationships, Leadership, Suffering, Joy, Peace, etc.). Search bar for filtering.                                                                                   |
+| **Time of Day**      | Auto-detected       | Derived from client's local time: Morning (5-11), Afternoon (12-16), Evening (17-20), Night (21-4). Not user-editable.                                                                                                                                                                                                                                     |
+| **Time of Year**     | Auto-detected       | Current date passed to AI. The AI uses this to factor in liturgical/seasonal context (Christmas, Easter, Lent, Advent, New Year, etc.).                                                                                                                                                                                                                    |
+| **Today's Date**     | Auto-detected       | Passed to AI so it can reference historical events that happened on this day in church history, world history (not Bible-specific), or the biblical calendar, and surface related scriptures.                                                                                                                                                              |
+| **Additional Notes** | Optional textarea   | Free-form text where the user can express specific interests. Examples: "I want to learn more about Mary," "Tell me about Peter's journey," "Something about overcoming fear." When provided, this input heavily influences Alternative 3 (User-Directed). When empty, Alternative 3 falls back to a deeper exploration of the selected category and mood. |
 
 **Key files:**
+
 - To find **input form component** visit [InputForm.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/components/InputForm.svelte)
 - To find **time detection utility** visit [time.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/utils/time.ts)
 
@@ -118,7 +121,7 @@ This is the core intelligence. The AI does **not** select isolated passages. It 
    - Time of day, time of year, today's date
    - Reading history summary (stories to avoid, topics recently covered, books already read) — scoped to the current category
    - Instructions for the AI's alternative generation logic (see below)
-5. **Calls Gemini API** with Grounding via Google Search enabled (only for the fresh alternatives).
+5. **Calls Anthropic Claude Haiku 5.5** with structured outputs (only for the fresh alternatives).
 6. **Combines reused + fresh alternatives** into a single set of 3.
 7. **Server stores the session** (with all alternatives, passages, and prayer points) in the DB. All alternatives start with `picked = false`.
 
@@ -136,19 +139,22 @@ This is the core intelligence. The AI does **not** select isolated passages. It 
 Each session returns exactly three alternatives. They are differentiated by **what influenced them most**:
 
 **Alternative 1 — Primary (Category + Mood Driven)**
+
 - The main recommendation, heavily influenced by the selected **category** and **mood**.
 - The AI identifies a complete Bible story that best matches the user's emotional state and chosen category.
 - Reading history is the primary constraint: if the category has stories not yet covered, pick a new one. If most stories under the category have been explored, revisit the same theme with a different narrative.
 - Time of day and time of year serve as secondary modifiers (e.g., morning → energizing story, Christmas season → incarnation narrative).
 
 **Alternative 2 — Historical Context (Date Driven)**
+
 - Heavily influenced by **today's date** and what happened on this day in history.
-- The AI researches (via Google Search grounding) significant events that occurred on this date — in church history, world history, or the biblical calendar.
+- The AI relates its historical knowledge of significant events on this date — in church history, world history, or the biblical calendar.
 - It then identifies a Bible story whose themes connect to that historical event.
 - Example: If today is the anniversary of Martin Luther King Jr.'s "I Have a Dream" speech, the AI might surface the story of Moses leading the Israelites (liberation narrative) or Amos's call for justice.
 - This alternative is always different from Alternative 1 — it prioritizes the historical connection over the category/mood match.
 
 **Alternative 3 — User-Directed (Notes Driven)**
+
 - Heavily influenced by the user's **additional notes** (if provided).
 - If the user wrote "I want to learn more about Mary," this alternative surfaces a complete story arc involving Mary (e.g., the Annunciation through Pentecost — Luke 1, Luke 2, John 2, John 19, Acts 1).
 - If no notes are provided, this alternative becomes a **deeper category exploration** — a story that goes deeper into the selected category from a different angle than Alternative 1.
@@ -178,11 +184,12 @@ Each alternative is a **complete story**, not a single passage. The AI follows t
 
 #### Passage Text Retrieval
 
-- Primary: Gemini fetches passage text via API.Bible integration or its own web search capability (Grounding with Google Search).
+- Primary: Anthropic Claude Haiku 5.5 generates the requested passage text from its model knowledge. The generation route does not invoke API.Bible or a web-search tool.
 - The AI is instructed to provide accurate, verifiable scripture text with book/chapter/verse references for every passage in every alternative.
-- No server-side validation layer — the AI either fetches from API.Bible or uses web search. Both produce accurate results.
+- No server-side validation layer — generated passage text should be independently verified before being treated as authoritative.
 
 **Key files:**
+
 - To find **AI orchestration** visit [ai.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/ai.ts)
 - To find **Bible API integration** visit [bible.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/bible.ts)
 - To find **scripture API endpoint** visit [api/scripture/+server.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/api/scripture/+server.ts)
@@ -191,7 +198,7 @@ Each alternative is a **complete story**, not a single passage. The AI follows t
 
 ### 5. Prayer Point Generation
 
-Generated by the same Gemini call as the story selection (single round-trip). Since each alternative is a full story spanning multiple passages, prayer points are generated **per alternative** and are more numerous than a single-passage approach would warrant.
+Generated by the same Anthropic call as the story selection (single round-trip). Since each alternative is a full story spanning multiple passages, prayer points are generated **per alternative** and are more numerous than a single-passage approach would warrant.
 
 The system prompt instructs the AI to:
 
@@ -226,6 +233,7 @@ After the AI returns, the user sees a page organized around the **three alternat
 6. **Bookmark button** — Save the entire session (all alternatives) for later review.
 
 **Key files:**
+
 - To find **session results page** visit [session/[id]/+page.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/session/[id]/+page.svelte)
 - To find **alternative card component** visit [AlternativeCard.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/components/AlternativeCard.svelte)
 - To find **passage display** visit [PassageDisplay.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/components/PassageDisplay.svelte)
@@ -247,6 +255,7 @@ Accessible via navigation. Displays:
 - **Revisit past sessions** — Click any session to re-read all alternatives, prayer points, and comments.
 
 **Key files:**
+
 - To find **history page** visit [history/+page.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/history/+page.svelte)
 - To find **history timeline component** visit [HistoryTimeline.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/components/HistoryTimeline.svelte)
 
@@ -260,18 +269,19 @@ An MCP (Model Context Protocol) endpoint that allows external LLMs to query the 
 
 **Exposed tools:**
 
-| Tool | Description |
-|------|-------------|
-| `get_reading_history` | Returns the user's recent sessions with all alternatives (story titles, passages, mood, category, date) |
-| `get_passages_read` | Returns all verse references the user has marked as read, grouped by session and alternative |
-| `get_comments` | Returns post-session comments the user has written, linked to sessions |
-| `get_usage_metrics` | Returns streak, total sessions, total alternatives explored, total verses, category distribution |
-| `get_session_details` | Returns full details of a specific session: all 3 alternatives, their passages, prayer points, and reasoning |
-| `get_quote_history` | Returns the log of motivational quotes shown to the user |
-| `get_alternatives_by_type` | Returns all alternatives filtered by influence type (primary, historical, user_directed) |
+| Tool                        | Description                                                                                                                 |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `get_reading_history`       | Returns the user's recent sessions with all alternatives (story titles, passages, mood, category, date)                     |
+| `get_passages_read`         | Returns all verse references the user has marked as read, grouped by session and alternative                                |
+| `get_comments`              | Returns post-session comments the user has written, linked to sessions                                                      |
+| `get_usage_metrics`         | Returns streak, total sessions, total alternatives explored, total verses, category distribution                            |
+| `get_session_details`       | Returns full details of a specific session: all 3 alternatives, their passages, prayer points, and reasoning                |
+| `get_quote_history`         | Returns the log of motivational quotes shown to the user                                                                    |
+| `get_alternatives_by_type`  | Returns all alternatives filtered by influence type (primary, historical, user_directed)                                    |
 | `get_unpicked_alternatives` | Returns unpicked alternatives for a given mood + category combination (used internally for reuse logic and exposed via MCP) |
 
 **Key files:**
+
 - To find **MCP server definition** visit [mcp/server.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/mcp/server.ts)
 - To find **MCP tool handlers** visit [mcp/tools.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/mcp/tools.ts)
 - To find **MCP HTTP endpoint** visit [api/mcp/+server.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/api/mcp/+server.ts)
@@ -426,7 +436,7 @@ All tables have Row Level Security (RLS) policies scoped to `auth.uid() = user_i
    │   │   └─ Alt 3: User-Directed (notes driven, or deeper category exploration)
    │   ├─ Story composition rules (complete narratives, multi-chapter, cross-book)
    │   └─ Prayer point generation instructions (8-15 per alternative)
-   ├─ Call Gemini API with Grounding via Google Search (fresh alternatives only)
+   ├─ Call Anthropic Claude Haiku 5.5 with structured outputs (fresh alternatives only)
    ├─ Combine reused + fresh alternatives into set of 3
    ├─ Store session + alternatives + passages + prayer points in DB
    │   (all alternatives start with picked = false)
@@ -469,20 +479,20 @@ All tables have Row Level Security (RLS) policies scoped to `auth.uid() = user_i
 
 The app's complexity doesn't warrant separate frontend and backend services. SvelteKit API routes handle all server-side logic (AI calls, DB queries, MCP endpoint) in a single deployable unit on Vercel. This simplifies auth, reduces latency, and eliminates CORS concerns.
 
-### Why `@google/genai` (not `@google/generative-ai`)
+### Why Anthropic Native Fetch
 
-The `@google/generative-ai` package is deprecated. Google's official SDK is now `@google/genai`, which supports Gemini 2.0+ features including Grounding with Google Search — a critical requirement for this app's Bible passage retrieval fallback.
+Claude Haiku 5.5 exposes the Messages API over plain HTTP. Native `fetch` works in the Vercel Node.js runtime and avoids an additional production SDK.
 
-### Why Grounding with Google Search
+### Structured AI Output
 
-The AI needs to fetch accurate Bible passage text. Rather than building a server-side validation layer or maintaining a local Bible text cache, Gemini's built-in Google Search tool allows it to retrieve accurate scripture text on demand. If API.Bible is unavailable or rate-limited, the AI falls back to web search automatically — no additional code needed.
+Anthropic structured outputs (`output_config.format` JSON schema) guarantee schema-valid JSON. The existing prompt still defines the response structure and the server still validates that exactly three alternatives are returned before storing them.
 
 ### Why API.Bible (Starter Plan)
 
 - Free tier: 5,000 API calls/month — sufficient for personal use.
 - Includes 3 copyrighted translations + all open-access Bibles.
 - Clean REST API for fetching passages by reference.
-- The AI is instructed to prefer API.Bible for passage text, falling back to web search if needed.
+- API.Bible remains available for a future server-side passage verification integration.
 
 ### Why Pre-Seeded Quotes (Not AI-Generated)
 
@@ -510,24 +520,24 @@ Roman Empire scholarly feel. The entire site — not just individual components 
 
 ### Typography
 
-| Usage | Font | Weight |
-|-------|------|--------|
-| Headers, titles | **Cinzel** | 600-700 |
-| Body text, passages | **Cormorant Garamond** | 400-600 |
-| Quote italics, accents | **IM Fell English** | 400, italic |
+| Usage                  | Font                   | Weight      |
+| ---------------------- | ---------------------- | ----------- |
+| Headers, titles        | **Cinzel**             | 600-700     |
+| Body text, passages    | **Cormorant Garamond** | 400-600     |
+| Quote italics, accents | **IM Fell English**    | 400, italic |
 
 All fonts loaded via Google Fonts in `app.html`.
 
 ### Color Palette
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| Parchment | `#F5E6C8` | Page background |
-| Dark Brown | `#3E2723` | Primary text |
-| Ink Black | `#1A1A1A` | Headers, emphasis |
-| Gold | `#C9A84C` | Accents, buttons, borders |
-| Aged Red | `#8B2500` | Highlights, links |
-| Aged Paper | `#E8D5B7` | Card backgrounds |
+| Token      | Hex       | Usage                     |
+| ---------- | --------- | ------------------------- |
+| Parchment  | `#F5E6C8` | Page background           |
+| Dark Brown | `#3E2723` | Primary text              |
+| Ink Black  | `#1A1A1A` | Headers, emphasis         |
+| Gold       | `#C9A84C` | Accents, buttons, borders |
+| Aged Red   | `#8B2500` | Highlights, links         |
+| Aged Paper | `#E8D5B7` | Card backgrounds          |
 
 ### UI Metaphors
 
@@ -544,10 +554,11 @@ All fonts loaded via Google Fonts in `app.html`.
 All secrets are stored in `.env` (gitignored).
 
 ```
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
+DATABASE_URL=
+SESSION_SECRET=
+ANTHROPIC_API_KEY=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
 API_BIBLE_KEY=
 ```
 

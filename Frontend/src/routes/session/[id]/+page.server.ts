@@ -12,6 +12,7 @@ import {
 } from '$lib/server/db/schema';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { getSession } from '$lib/server/auth';
+import { userOwnsSession } from '$lib/server/authorization';
 
 export const load: PageServerLoad = async ({ params, cookies }) => {
 	const session = await getSession(cookies);
@@ -39,13 +40,23 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 
 	const altIds = sessionAlts.map((a) => a.id);
 
-	const allPassages = altIds.length > 0
-		? await db.select().from(passages).where(inArray(passages.alternativeId, altIds)).orderBy(passages.orderIndex)
-		: [];
+	const allPassages =
+		altIds.length > 0
+			? await db
+					.select()
+					.from(passages)
+					.where(inArray(passages.alternativeId, altIds))
+					.orderBy(passages.orderIndex)
+			: [];
 
-	const allPrayerPoints = altIds.length > 0
-		? await db.select().from(prayerPoints).where(inArray(prayerPoints.alternativeId, altIds)).orderBy(prayerPoints.orderIndex)
-		: [];
+	const allPrayerPoints =
+		altIds.length > 0
+			? await db
+					.select()
+					.from(prayerPoints)
+					.where(inArray(prayerPoints.alternativeId, altIds))
+					.orderBy(prayerPoints.orderIndex)
+			: [];
 
 	const sessionComments = await db
 		.select()
@@ -75,9 +86,12 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 };
 
 export const actions: Actions = {
-	pick: async ({ request, cookies }) => {
+	pick: async ({ request, cookies, params }) => {
 		const session = await getSession(cookies);
 		if (!session) return fail(401, { error: 'Unauthorized' });
+		if (!(await userOwnsSession(session.user.id, params.id))) {
+			return fail(404, { error: 'Session not found' });
+		}
 
 		const formData = await request.formData();
 		const alternativeId = formData.get('alternativeId') as string;
@@ -85,7 +99,7 @@ export const actions: Actions = {
 		await db
 			.update(alternatives)
 			.set({ picked: true })
-			.where(eq(alternatives.id, alternativeId));
+			.where(and(eq(alternatives.id, alternativeId), eq(alternatives.sessionId, params.id)));
 
 		return { success: true };
 	},
@@ -93,6 +107,9 @@ export const actions: Actions = {
 	comment: async ({ request, cookies, params }) => {
 		const session = await getSession(cookies);
 		if (!session) return fail(401, { error: 'Unauthorized' });
+		if (!(await userOwnsSession(session.user.id, params.id))) {
+			return fail(404, { error: 'Session not found' });
+		}
 
 		const formData = await request.formData();
 		const content = formData.get('content') as string;
@@ -113,14 +130,27 @@ export const actions: Actions = {
 	markVerse: async ({ request, cookies, params }) => {
 		const session = await getSession(cookies);
 		if (!session) return fail(401, { error: 'Unauthorized' });
+		if (!(await userOwnsSession(session.user.id, params.id))) {
+			return fail(404, { error: 'Session not found' });
+		}
 
 		const formData = await request.formData();
 		const verseReferences = formData.getAll('verseReference') as string[];
 		const alternativeId = formData.get('alternativeId') as string | null;
+		if (alternativeId) {
+			const matchingAlternative = await db
+				.select({ id: alternatives.id })
+				.from(alternatives)
+				.where(and(eq(alternatives.id, alternativeId), eq(alternatives.sessionId, params.id)))
+				.limit(1);
+			if (matchingAlternative.length === 0) {
+				return fail(400, { error: 'Alternative does not belong to this session' });
+			}
+		}
 
-		await db.delete(versesRead).where(
-			and(eq(versesRead.sessionId, params.id), eq(versesRead.userId, session.user.id))
-		);
+		await db
+			.delete(versesRead)
+			.where(and(eq(versesRead.sessionId, params.id), eq(versesRead.userId, session.user.id)));
 
 		if (verseReferences.length > 0) {
 			await db.insert(versesRead).values(
@@ -139,6 +169,9 @@ export const actions: Actions = {
 	bookmark: async ({ cookies, params }) => {
 		const session = await getSession(cookies);
 		if (!session) return fail(401, { error: 'Unauthorized' });
+		if (!(await userOwnsSession(session.user.id, params.id))) {
+			return fail(404, { error: 'Session not found' });
+		}
 
 		const existing = await db
 			.select()

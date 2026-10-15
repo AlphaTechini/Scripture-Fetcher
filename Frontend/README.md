@@ -7,9 +7,9 @@ A personal Bible study companion that uses AI to surface **complete Bible storie
 - **Framework:** SvelteKit (fullstack)
 - **Frontend:** Svelte 5, Tailwind CSS v4
 - **Backend:** SvelteKit API routes
-- **Database:** Supabase (Postgres + Auth)
-- **AI:** Google Gemini API (`@google/genai`) with Grounding via Google Search
-- **Bible Data:** API.Bible (Starter plan) with Gemini web search fallback
+- **Database:** Supabase Postgres with custom database-backed authentication
+- **AI:** Anthropic Claude Haiku 5.5 (`claude-haiku-5-5`) via the Messages API with structured outputs
+- **Bible Data:** API.Bible (Starter plan)
 - **MCP:** Streamable HTTP endpoint for external LLM access
 - **Deployment:** Vercel (`@sveltejs/adapter-vercel`)
 

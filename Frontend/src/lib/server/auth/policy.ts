@@ -1,0 +1,10 @@
+export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const VERIFICATION_FLOW_TTL_S = 15 * 60;
+export const OTP_TTL_MS = 10 * 60 * 1000;
+export const OTP_MAX_ATTEMPTS = 5;
+export const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+export const OTP_EMAIL_SEND_LIMIT = 5;
+export const OTP_IP_SEND_LIMIT = 10;
+export const OTP_SEND_WINDOW_MS = 60 * 60 * 1000;
+export const PASSWORD_MIN_LENGTH = 8;
+export const BCRYPT_MAX_PASSWORD_BYTES = 72;
