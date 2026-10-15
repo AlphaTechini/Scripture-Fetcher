@@ -18,8 +18,9 @@ The database state for the earlier plaintext `email_verifications` schema is unk
 
 ## Deployment
 
-- Deploy through the GitHub integration: pushes to `auth-and-anthropic` build server-side and the preview deployment is promoted to production. Local CLI deploys are the fallback when the network allows large uploads.
-- When the Vercel CLI fails with `fetch failed`, `UND_ERR_CONNECT_TIMEOUT`, or `ECONNRESET` on large uploads (observed here for TLS 1.3 handshakes and big request bodies), run it with `NODE_OPTIONS=--tls-max-v1.2`. Small CLI calls like `env ls`, `inspect`, and `promote` keep working.
+- Pushes to `auth-and-anthropic` build preview deployments server-side through the GitHub integration. Production ships with `vercel deploy --prod` from a clean tree, which re-anchors `scripture-fetcher.vercel.app` reliably.
+- Do not use `vercel promote` here: for this git-connected project it builds from the production branch and wedges the domain alias, leaving the edge answering `NOT_FOUND` while `alias set` reports success without sticking.
+- When the Vercel CLI fails with `fetch failed`, `UND_ERR_CONNECT_TIMEOUT`, or `ECONNRESET` on large uploads (observed here for TLS 1.3 handshakes and big request bodies), run it with `NODE_OPTIONS=--tls-max-v1.2`. Small CLI calls like `env ls` and `inspect` keep working.
 
 ## AI Generation
 
