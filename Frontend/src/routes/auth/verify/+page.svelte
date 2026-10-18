@@ -12,7 +12,7 @@
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-[#F5E6C8] px-4">
-	<div class="w-full max-w-md">
+	<div class="w-full max-w-md animate-rise-in motion-reduce:animate-none">
 		<div class="text-center mb-8">
 			<h1 class="font-[Cinzel] text-4xl font-bold text-[#1A1A1A] mb-2">Scripture Fetcher</h1>
 			<p class="font-[Cormorant_Garamond] text-lg text-[#3E2723]">Verify your email to begin</p>
