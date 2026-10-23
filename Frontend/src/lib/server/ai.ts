@@ -1,21 +1,14 @@
-const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_MODEL = 'claude-haiku-5-5';
-const ANTHROPIC_VERSION = '2023-06-01';
+import {
+	ANTHROPIC_MESSAGES_URL,
+	ANTHROPIC_MODEL,
+	ANTHROPIC_VERSION,
+	getAnthropicApiKey,
+	type AnthropicMessageResponse
+} from './anthropic';
+import { findHistoricalFact, type HistoricalFact } from './historical-fact';
+
 // Haiku 5.5 caps output at 128K tokens; this leaves headroom for thinking tokens plus long multi-chapter passages.
 const MAX_OUTPUT_TOKENS = 64000;
-
-interface AnthropicContentBlock {
-	type: string;
-	text?: string;
-}
-
-interface AnthropicMessageResponse {
-	content?: AnthropicContentBlock[];
-	stop_reason?: string | null;
-	error?: {
-		message?: string;
-	};
-}
 
 // Structured outputs reject numeric and string-length constraints, so the exactly-3-alternatives rule stays enforced in code below.
 const ALTERNATIVES_OUTPUT_SCHEMA = {
@@ -77,23 +70,6 @@ const ALTERNATIVES_OUTPUT_SCHEMA = {
 	additionalProperties: false
 };
 
-async function getAnthropicApiKey(): Promise<string> {
-	try {
-		const { env } = await import('$env/dynamic/private');
-		if (env.ANTHROPIC_API_KEY) return env.ANTHROPIC_API_KEY;
-	} catch {
-		// Standalone verification scripts do not have SvelteKit's environment module.
-	}
-
-	{
-		const { config } = await import('dotenv');
-		config();
-		if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
-	}
-
-	throw new Error('ANTHROPIC_API_KEY environment variable is required');
-}
-
 export interface GeneratedPassage {
 	reference: string;
 	passageText: string;
@@ -132,7 +108,21 @@ export interface GenerateAlternativesInput {
 	};
 }
 
-function buildSystemPrompt(input: GenerateAlternativesInput): string {
+function buildHistoricalNote(historicalFact: HistoricalFact | null): string {
+	if (historicalFact) {
+		return `A web search confirmed this event for today: "${historicalFact.fact}" (source: ${historicalFact.source}).
+Build this alternative around that event. Do not swap it for a different one.
+The storySummary MUST open with one sentence stating this event and its year, ending with "(source: ${historicalFact.source})", then summarize the Bible story.`;
+	}
+
+	return `Pick a widely documented event from church history, world history, or the biblical calendar that happened on this calendar day. Only use an event you are confident about.
+The storySummary MUST open with one sentence stating the event and its year, then summarize the Bible story. If you are not certain of the exact day, open with "Around this time of year" instead of claiming the date.`;
+}
+
+function buildSystemPrompt(
+	input: GenerateAlternativesInput,
+	historicalFact: HistoricalFact | null
+): string {
 	const historyNote =
 		input.readingHistory.stories.length > 0
 			? `Recently covered stories: ${input.readingHistory.stories.join(', ')}. Recently covered topics: ${input.readingHistory.topics.join(', ')}. Books recently read: ${input.readingHistory.books.join(', ')}. DO NOT repeat these.`
@@ -173,7 +163,7 @@ ALTERNATIVE 2 — HISTORICAL CONTEXT (Date Driven):
 Label: "Historical Context"
 InfluenceType: "historical"
 Heavily influenced by today's date: "${input.currentDate}".
-Research what significant events happened on this date in church history, world history, or the biblical calendar.
+${buildHistoricalNote(historicalFact)}
 Identify a Bible story whose themes connect to that historical event.
 This alternative must be different from Alternative 1.
 
@@ -224,7 +214,8 @@ export async function generateAlternatives(
 	input: GenerateAlternativesInput
 ): Promise<GeneratedAlternative[]> {
 	const apiKey = await getAnthropicApiKey();
-	const systemPrompt = buildSystemPrompt(input);
+	const historicalFact = await findHistoricalFact(input.currentDate);
+	const systemPrompt = buildSystemPrompt(input, historicalFact);
 	const response = await fetch(ANTHROPIC_MESSAGES_URL, {
 		method: 'POST',
 		headers: {

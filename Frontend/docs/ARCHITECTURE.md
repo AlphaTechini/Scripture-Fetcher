@@ -121,9 +121,10 @@ This is the core intelligence. The AI does **not** select isolated passages. It 
    - Time of day, time of year, today's date
    - Reading history summary (stories to avoid, topics recently covered, books already read) — scoped to the current category
    - Instructions for the AI's alternative generation logic (see below)
-5. **Calls Anthropic Claude Haiku 5.5** with structured outputs (only for the fresh alternatives).
-6. **Combines reused + fresh alternatives** into a single set of 3.
-7. **Server stores the session** (with all alternatives, passages, and prayer points) in the DB. All alternatives start with `picked = false`.
+5. **Looks up a historical fact** with a small Claude Haiku 5.5 call using the web search tool (max 3 searches) to confirm an "on this day" event. Failure falls back to model knowledge.
+6. **Calls Anthropic Claude Haiku 5.5** with structured outputs (only for the fresh alternatives). The Historical Context summary opens with the confirmed fact and its source.
+7. **Combines reused + fresh alternatives** into a single set of 3.
+8. **Server stores the session** (with all alternatives, passages, and prayer points) in the DB. All alternatives start with `picked = false`.
 
 #### Alternative Reuse Rules
 
@@ -184,7 +185,7 @@ Each alternative is a **complete story**, not a single passage. The AI follows t
 
 #### Passage Text Retrieval
 
-- Primary: Anthropic Claude Haiku 5.5 generates the requested passage text from its model knowledge. The generation route does not invoke API.Bible or a web-search tool.
+- Primary: Anthropic Claude Haiku 5.5 generates the requested passage text from its model knowledge. The generation route does not invoke API.Bible, and web search is used only for the historical fact lookup, never for passage text.
 - The AI is instructed to provide accurate, verifiable scripture text with book/chapter/verse references for every passage in every alternative.
 - No server-side validation layer — generated passage text should be independently verified before being treated as authoritative.
 

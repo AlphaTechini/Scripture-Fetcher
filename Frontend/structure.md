@@ -37,6 +37,7 @@ src/
 - To find **Database client** visit [db/index.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/db/index.ts)
 - To find **Authentication logic** visit [auth/README.md](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/auth/README.md)
 - To find **Quote selection logic** visit [quotes.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/quotes.ts)
+- To find **Historical fact lookup (web search)** visit [historical-fact.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/historical-fact.ts)
 - To find **Alternative reuse logic** visit [reuse.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/lib/server/reuse.ts)
 - To find **MCP endpoint** visit [api/mcp/+server.ts](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/api/mcp/+server.ts)
 - To find **Main page (welcome + input)** visit [+page.svelte](file:///C:/PROJECTS/Scripture%20Fetcher/Frontend/src/routes/+page.svelte)

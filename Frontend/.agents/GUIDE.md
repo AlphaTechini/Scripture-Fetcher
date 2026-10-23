@@ -30,3 +30,5 @@ The database state for the earlier plaintext `email_verifications` schema is unk
 - Store the API key in `ANTHROPIC_API_KEY`; do not retain other AI provider credentials or dependencies.
 - Send no sampling parameters; `claude-haiku-5-5` rejects non-default `temperature`, `top_p`, and any `top_k`.
 - Read the answer from response content blocks of type `text`; adaptive thinking blocks precede them.
+- The historical fact comes from a separate web-search call (`web_search_20250305`, max 3 searches) before generation, never from web search inside the structured-output call. The lookup must never fail the session; on error it returns null and generation falls back to model knowledge.
+- Mood and the user's own notes steer the Primary alternative, not only the category name.
