@@ -142,6 +142,11 @@ function buildSystemPrompt(input: GenerateAlternativesInput): string {
 		? `User specifically requested: "${input.userNotes}". Alternative 3 MUST directly address this interest.`
 		: 'No additional notes provided. Alternative 3 should be a deeper exploration of the selected category from a different angle.';
 
+	// Without this, a category like "Provision" pulls toward famine and crisis stories even when the user is celebrating.
+	const userWordsNote = input.userNotes
+		? `The user described their situation in their own words: "${input.userNotes}". Use these words to interpret the mood and category: they outweigh any generic reading of the category name.`
+		: '';
+
 	return `You are a Bible study guide. Return exactly 3 complete Bible story alternatives based on the user's inputs.
 
 RULES FOR ALL ALTERNATIVES:
@@ -157,6 +162,9 @@ ALTERNATIVE 1 — PRIMARY (Category + Mood Driven):
 Label: "Primary"
 InfluenceType: "primary"
 Heavily influenced by mood: "${input.mood}" and category: "${input.category}".
+The mood sets the emotional register. The story's tone must match how the user feels right now (for example, joyful → thanksgiving, celebration, harvest, fulfilled promises; anxious → reassurance in the middle of trouble).
+Pick a story that fits the category AND the mood together. Do not default to stories centered on hardship, famine, or persecution unless the mood or the user's words point there.
+${userWordsNote}
 Time of day: "${input.timeOfDay}" (secondary modifier: morning→energizing, night→peace/rest).
 Time of year: "${input.timeOfYear}" (secondary modifier: Christmas→incarnation, Lent→sacrifice).
 ${historyNote}
